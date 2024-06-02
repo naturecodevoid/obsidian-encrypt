@@ -42,13 +42,18 @@ export default class MeldEncryptSettingsTab extends PluginSettingTab {
 
 		const updateRememberPasswordSettingsUi = () => {
 			
-			if ( !this.settings.rememberPassword ){
+			if ( !this.settings.rememberPassword ) {
 				pwTimeoutSetting.settingEl.hide();
 				rememberPasswordLevelSetting.settingEl.hide();
 				return;
 			}
-			
-			pwTimeoutSetting.settingEl.show();
+
+			if ( this.settings.rememberPasswordLevel != SessionPasswordService.LevelEnvironment ){
+				pwTimeoutSetting.settingEl.show();
+			}else{
+				pwTimeoutSetting.settingEl.hide();
+			}
+
 			rememberPasswordLevelSetting.settingEl.show();
 
 			const rememberPasswordTimeout = this.settings.rememberPasswordTimeout;
@@ -77,6 +82,27 @@ export default class MeldEncryptSettingsTab extends PluginSettingTab {
 			})
 		;
 
+		const rememberPasswordLevelSetting = new Setting(containerEl)
+			.setName('Remember passwords by:')
+			.setDesc( this.buildRememberPasswordDescription() )
+			.addDropdown( cb =>{
+				cb
+					.addOption( SessionPasswordService.LevelEnvironment, 'Environment Variable')
+					.addOption( SessionPasswordService.LevelVault, 'Vault')
+					.addOption( SessionPasswordService.LevelParentPath, 'Folder')
+					.addOption( SessionPasswordService.LevelFilename, 'File')
+					.setValue( this.settings.rememberPasswordLevel )
+					.onChange( async value => {
+						this.settings.rememberPasswordLevel = value;
+						await this.plugin.saveSettings();
+						SessionPasswordService.setLevel( this.settings.rememberPasswordLevel );
+						updateRememberPasswordSettingsUi();
+					})
+				;
+			})
+		;
+
+		
 		const pwTimeoutSetting = new Setting(containerEl)
 			.setDesc('The number of minutes to remember passwords.')
 			.addSlider( slider => {
@@ -94,25 +120,27 @@ export default class MeldEncryptSettingsTab extends PluginSettingTab {
 			})
 		;
 
-		const rememberPasswordLevelSetting = new Setting(containerEl)
-			.setName('Remember passwords by:')
-			.setDesc( this.buildRememberPasswordDescription() )
-			.addDropdown( cb =>{
-				cb
-					.addOption( SessionPasswordService.LevelVault, 'Vault')
-					.addOption( SessionPasswordService.LevelParentPath, 'Folder')
-					.addOption( SessionPasswordService.LevelFilename, 'File')
-					.setValue( this.settings.rememberPasswordLevel )
-					.onChange( async value => {
-						this.settings.rememberPasswordLevel = value;
-						await this.plugin.saveSettings();
-						SessionPasswordService.setLevel( this.settings.rememberPasswordLevel );
-						updateRememberPasswordSettingsUi();
+		let envVarValue = '';
+		const envVarSetting = new Setting(containerEl)
+			.setName('Set the environment variable to:')
+			.setDesc( 'When needed the password is read from the environment variable named `MDENC_KEY`.' )
+			.addText( text => {
+				text
+				.onChange( async value => {
+					envVarValue = value;
+				})
+				;
+			})
+			.addButton( btn => {
+				btn
+					.setButtonText( 'Set')
+					.onClick( async () => {
+						process.env['MDENC_KEY'] = envVarValue;
 					})
 				;
 			})
 		;
-		
+
 		updateRememberPasswordSettingsUi();
 
 		// build feature settings
@@ -126,18 +154,22 @@ export default class MeldEncryptSettingsTab extends PluginSettingTab {
 		const f = new DocumentFragment();
 
 		const tbody = f.createEl( 'table' ).createTBody();
-		
+
 		let tr = tbody.createEl( 'tr' );
-		tr.createEl( 'th', { text: 'Vault:', attr: { 'align': 'left'} });
-		tr.createEl( 'td', { text: 'typically, you\'ll use the same password every time.' });
+		tr.createEl( 'th', { text: 'Environment Variable:', attr: { 'align': 'right', 'style': 'width:12em;'} });
+		tr.createEl( 'td', { text: 'The password is read from the environment variable `MDENC_KEY`.' });
 		
 		tr = tbody.createEl( 'tr' );
-		tr.createEl( 'th', { text: 'Folder:', attr: { 'align': 'left'} });
-		tr.createEl( 'td', { text: 'typically, you\'ll use the same password for each note within a folder.' });
+		tr.createEl( 'th', { text: 'Vault:', attr: { 'align': 'right'} });
+		tr.createEl( 'td', { text: 'Typically, you\'ll use the same password every time.' });
+		
+		tr = tbody.createEl( 'tr' );
+		tr.createEl( 'th', { text: 'Folder:', attr: { 'align': 'right'} });
+		tr.createEl( 'td', { text: 'Typically, you\'ll use the same password for each note within a folder.' });
 
 		tr = tbody.createEl( 'tr' );
-		tr.createEl( 'th', { text: 'File:', attr: { 'align': 'left'} });
-		tr.createEl( 'td', { text: 'typically, each note will have a unique password.' });
+		tr.createEl( 'th', { text: 'File:', attr: { 'align': 'right'} });
+		tr.createEl( 'td', { text: 'Typically, each note will have a unique password.' });
 
 		return f;
 	}
